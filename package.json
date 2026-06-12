@@ -24,6 +24,7 @@
     "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test test/*.test.ts",
+    "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test test/*.test.ts",
     "check": "npm run typecheck && npm test",
     "install:local": "node scripts/install-local.mjs"
   },
@@ -48,7 +49,7 @@
     "node": ">=22"
   },
   "peerDependencies": {
-    "@opencode-ai/plugin": ">=1.17.4"
+    "@opencode-ai/plugin": ">=1.17.4 <2"
   },
   "devDependencies": {
     "@opencode-ai/plugin": "^1.17.4",

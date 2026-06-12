@@ -17,4 +17,11 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm ci --silent
-      - run: npm run check && npm run build
+      - name: Audit dependencies
+        run: npm audit --audit-level=moderate
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Test with coverage
+        run: npm run test:coverage
+      - name: Build
+        run: npm run build

@@ -8,6 +8,7 @@ import { DEFAULT_CONFIG, loadConfig, normalizeConfig, shouldEnforceTool } from "
 import { estimateTokens, truncateMiddle } from "../src/estimation.ts"
 import { pruneReports, writeReport } from "../src/reporting.ts"
 import { SpankNSave } from "../src/plugin.ts"
+import { mockPluginInput, mockEventMessageUpdated, mockEventSessionIdle, mockEventSessionDeleted } from "./helpers.ts"
 import type { AnalysisReport, AssistantUsage, SessionState } from "../src/types.ts"
 
 // ── P1-01 edge cases: pruning ownership ───────────────────────────────────
@@ -374,14 +375,14 @@ test("lifecycle: dispose clears all state after persisting", async () => {
     JSON.stringify({ mode: "suggest", reportDirectory: join(dir, "reports") }),
   )
 
-  const hooks = await SpankNSave({
+  const hooks = await SpankNSave(mockPluginInput({
     directory: dir,
     client: { app: { log: async () => undefined }, tui: { showToast: async () => undefined } },
-  } as never)
+  }))
 
   // Feed events for sessions
-  await hooks.event?.({ event: { type: "message.updated", properties: { info: { id: "m1", sessionID: "a", role: "assistant", time: { created: 1 }, providerID: "p", modelID: "m", cost: 0, tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } } } } } } as never)
-  await hooks.event?.({ event: { type: "message.updated", properties: { info: { id: "m2", sessionID: "b", role: "assistant", time: { created: 1 }, providerID: "p", modelID: "m", cost: 0, tokens: { input: 200, output: 100, reasoning: 0, cache: { read: 0, write: 0 } } } } } } as never)
+  await hooks.event?.(mockEventMessageUpdated({ id: "m1", sessionID: "a", cost: 0, tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } } }))
+  await hooks.event?.(mockEventMessageUpdated({ id: "m2", sessionID: "b", cost: 0, tokens: { input: 200, output: 100, reasoning: 0, cache: { read: 0, write: 0 } } }))
 
   await hooks.dispose?.()
 
@@ -401,16 +402,15 @@ test("lifecycle: session deleted persists before cleanup, idle after delete is s
     JSON.stringify({ mode: "suggest", reportDirectory: join(dir, "reports") }),
   )
 
-  const hooks = await SpankNSave({
+  const hooks = await SpankNSave(mockPluginInput({
     directory: dir,
     client: { app: { log: async () => undefined }, tui: { showToast: async () => undefined } },
-  } as never)
+  }))
 
-  await hooks.event?.({ event: { type: "message.updated", properties: { info: { id: "m1", sessionID: "gone", role: "assistant", time: { created: 1 }, providerID: "p", modelID: "m", cost: 0, tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } } } } } } as never)
-  await hooks.event?.({ event: { type: "session.deleted", properties: { info: { id: "gone" } } } } as never)
+  await hooks.event?.(mockEventMessageUpdated({ id: "m1", sessionID: "gone", cost: 0, tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } } }))
+  await hooks.event?.(mockEventSessionDeleted({ id: "gone" }))
   // Idle after deletion should not crash
-  await hooks.event?.({ event: { type: "session.idle", properties: { sessionID: "gone" } } } as never)
-
+  await hooks.event?.(mockEventSessionIdle({ sessionID: "gone" }))
   await hooks.dispose?.()
 
   const entries = await readdir(join(dir, "reports"))

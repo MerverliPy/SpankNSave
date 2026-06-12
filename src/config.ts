@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import type { Mode, SpankNSaveConfig } from "./types.ts"
 
+/** Default configuration values used when no user config file is present. */
 export const DEFAULT_CONFIG: SpankNSaveConfig = {
   enabled: true,
   mode: "suggest",
@@ -30,24 +31,54 @@ export const DEFAULT_CONFIG: SpankNSaveConfig = {
 
 const VALID_MODES = new Set<Mode>(["observe", "suggest", "enforce"])
 
+const PRE = "[spank-n-save]"
+
 const finiteNumber = (
+  key: string,
   value: unknown,
   fallback: number,
   minimum: number,
   maximum: number,
 ): number => {
-  if (typeof value !== "number" || !Number.isFinite(value)) return fallback
-  return Math.min(maximum, Math.max(minimum, value))
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    if (value !== undefined && value !== null) {
+      console.warn(`${PRE} ${key}: invalid value, using default ${fallback}`)
+    }
+    return fallback
+  }
+  const clamped = Math.min(maximum, Math.max(minimum, value))
+  if (clamped !== value) {
+    console.warn(`${PRE} ${key}: ${value} clamped to ${clamped}`)
+  }
+  return clamped
 }
 
-const positiveInteger = (value: unknown, fallback: number, maximum = 10_000_000): number =>
-  Math.floor(finiteNumber(value, fallback, 1, maximum))
+const positiveInteger = (key: string, value: unknown, fallback: number, maximum = 10_000_000): number => {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    if (value !== undefined && value !== null) {
+      console.warn(`${PRE} ${key}: invalid value, using default ${fallback}`)
+    }
+    return fallback
+  }
+  const raw = value as number
+  const clamped = Math.floor(Math.min(maximum, Math.max(1, raw)))
+  if (clamped !== raw || Math.floor(raw) !== raw) {
+    console.warn(`${PRE} ${key}: ${raw} clamped to ${clamped}`)
+  }
+  return clamped
+}
 
 const stringArray = (value: unknown, fallback: string[]): string[] => {
   if (!Array.isArray(value)) return fallback
   return [...new Set(value.filter((item): item is string => typeof item === "string" && item.length > 0))]
 }
 
+/**
+ * Normalizes and validates a raw configuration value into a SpankNSaveConfig.
+ * Missing or invalid fields fall back to DEFAULT_CONFIG with console warnings.
+ * @param value - Raw config value (parsed JSON or unknown).
+ * @returns A validated SpankNSaveConfig with all fields populated.
+ */
 export const normalizeConfig = (value: unknown): SpankNSaveConfig => {
   const source = value && typeof value === "object" ? (value as Record<string, unknown>) : {}
   const mode = typeof source.mode === "string" && VALID_MODES.has(source.mode as Mode)
@@ -55,12 +86,14 @@ export const normalizeConfig = (value: unknown): SpankNSaveConfig => {
     : DEFAULT_CONFIG.mode
 
   const warningContextRatio = finiteNumber(
+    "warningContextRatio",
     source.warningContextRatio,
     DEFAULT_CONFIG.warningContextRatio,
     0.05,
     0.99,
   )
   const criticalContextRatio = finiteNumber(
+    "criticalContextRatio",
     source.criticalContextRatio,
     DEFAULT_CONFIG.criticalContextRatio,
     warningContextRatio,
@@ -69,7 +102,7 @@ export const normalizeConfig = (value: unknown): SpankNSaveConfig => {
 
   const maxOutputTokens = source.maxOutputTokens === undefined
     ? undefined
-    : positiveInteger(source.maxOutputTokens, DEFAULT_CONFIG.maxAssistantOutputTokens)
+    : positiveInteger("maxOutputTokens", source.maxOutputTokens, DEFAULT_CONFIG.maxAssistantOutputTokens)
 
   return {
     enabled: typeof source.enabled === "boolean" ? source.enabled : DEFAULT_CONFIG.enabled,
@@ -77,29 +110,33 @@ export const normalizeConfig = (value: unknown): SpankNSaveConfig => {
     notify: typeof source.notify === "boolean" ? source.notify : DEFAULT_CONFIG.notify,
     warningContextRatio,
     criticalContextRatio,
-    maxToolOutputTokens: positiveInteger(source.maxToolOutputTokens, DEFAULT_CONFIG.maxToolOutputTokens),
-    maxPromptTokens: positiveInteger(source.maxPromptTokens, DEFAULT_CONFIG.maxPromptTokens),
-    maxSystemTokens: positiveInteger(source.maxSystemTokens, DEFAULT_CONFIG.maxSystemTokens),
-    maxToolSchemaTokens: positiveInteger(source.maxToolSchemaTokens, DEFAULT_CONFIG.maxToolSchemaTokens),
-    maxReasoningRatio: finiteNumber(source.maxReasoningRatio, DEFAULT_CONFIG.maxReasoningRatio, 0.05, 1),
-    minReasoningTokens: positiveInteger(source.minReasoningTokens, DEFAULT_CONFIG.minReasoningTokens),
+    maxToolOutputTokens: positiveInteger("maxToolOutputTokens", source.maxToolOutputTokens, DEFAULT_CONFIG.maxToolOutputTokens),
+    maxPromptTokens: positiveInteger("maxPromptTokens", source.maxPromptTokens, DEFAULT_CONFIG.maxPromptTokens),
+    maxSystemTokens: positiveInteger("maxSystemTokens", source.maxSystemTokens, DEFAULT_CONFIG.maxSystemTokens),
+    maxToolSchemaTokens: positiveInteger("maxToolSchemaTokens", source.maxToolSchemaTokens, DEFAULT_CONFIG.maxToolSchemaTokens),
+    maxReasoningRatio: finiteNumber("maxReasoningRatio", source.maxReasoningRatio, DEFAULT_CONFIG.maxReasoningRatio, 0.05, 1),
+    minReasoningTokens: positiveInteger("minReasoningTokens", source.minReasoningTokens, DEFAULT_CONFIG.minReasoningTokens),
     maxAssistantOutputTokens: positiveInteger(
+      "maxAssistantOutputTokens",
       source.maxAssistantOutputTokens,
       DEFAULT_CONFIG.maxAssistantOutputTokens,
     ),
     maxContextGrowthTokensPerTurn: positiveInteger(
+      "maxContextGrowthTokensPerTurn",
       source.maxContextGrowthTokensPerTurn,
       DEFAULT_CONFIG.maxContextGrowthTokensPerTurn,
     ),
     duplicateToolCallThreshold: Math.max(
       2,
       positiveInteger(
+        "duplicateToolCallThreshold",
         source.duplicateToolCallThreshold,
         DEFAULT_CONFIG.duplicateToolCallThreshold,
         100,
       ),
     ),
     maxToolObservationsPerSession: positiveInteger(
+      "maxToolObservationsPerSession",
       source.maxToolObservationsPerSession,
       DEFAULT_CONFIG.maxToolObservationsPerSession,
       100_000,
@@ -109,15 +146,17 @@ export const normalizeConfig = (value: unknown): SpankNSaveConfig => {
       typeof source.reportDirectory === "string" && source.reportDirectory.trim()
         ? source.reportDirectory.trim()
         : DEFAULT_CONFIG.reportDirectory,
-    maxReports: positiveInteger(source.maxReports, DEFAULT_CONFIG.maxReports, 100_000),
-    toastCooldownMs: positiveInteger(source.toastCooldownMs, DEFAULT_CONFIG.toastCooldownMs, 86_400_000),
+    maxReports: positiveInteger("maxReports", source.maxReports, DEFAULT_CONFIG.maxReports, 100_000),
+    toastCooldownMs: positiveInteger("toastCooldownMs", source.toastCooldownMs, DEFAULT_CONFIG.toastCooldownMs, 86_400_000),
     charsPerTokenEstimate: finiteNumber(
+      "charsPerTokenEstimate",
       source.charsPerTokenEstimate,
       DEFAULT_CONFIG.charsPerTokenEstimate,
       1,
       12,
     ),
     truncationHeadRatio: finiteNumber(
+      "truncationHeadRatio",
       source.truncationHeadRatio,
       DEFAULT_CONFIG.truncationHeadRatio,
       0.1,
@@ -145,6 +184,14 @@ const readJson = async (path: string): Promise<unknown | undefined> => {
   }
 }
 
+/**
+ * Loads and validates plugin configuration from a directory.
+ * Reads .opencode/spank-n-save.json first, then falls back to legacy .opencode/token-guard.json.
+ * Returns DEFAULT_CONFIG if neither file exists or is unreadable.
+ * @param directory - Project root directory.
+ * @returns Resolved config, file path, and optional legacy migration source.
+ * @throws If the config file exists but cannot be parsed due to a non-recoverable filesystem error.
+ */
 export const loadConfig = async (
   directory: string,
 ): Promise<{ config: SpankNSaveConfig; path: string; migratedFrom?: string }> => {
@@ -162,6 +209,13 @@ export const loadConfig = async (
   return { config: DEFAULT_CONFIG, path: preferredPath }
 }
 
+/**
+ * Checks whether a tool should be enforced based on allowlist/denylist configuration.
+ * Denylist takes precedence; if allowlist is empty, all tools are enforced.
+ * @param tool - Tool name to check.
+ * @param config - Resolved plugin configuration.
+ * @returns true if the tool should be enforced.
+ */
 export const shouldEnforceTool = (tool: string, config: SpankNSaveConfig): boolean => {
   if (config.enforcementToolDenylist.includes(tool)) return false
   if (config.enforcementToolAllowlist.length === 0) return true

@@ -18,7 +18,12 @@
       "tool output attribution",
       "potential token savings"
     ],
-    "rawContentPersisted": false
+    "rawContentPersisted": false,
+    "privacy": {
+      "perMessageIdentifiers": "never-persisted",
+      "toolArgHashes": "never-persisted",
+      "rawPrompts": "never-persisted"
+    }
   },
   "summary": {
     "sessionID": "session-example",
@@ -34,7 +39,7 @@
       "cost": 2.41
     },
     "estimated": {
-      "latestPromptTokens": 760,
+      "latestTextPromptTokens": 760,
       "systemTokens": 4200,
       "enabledToolSchemaTokens": 8100
     },
