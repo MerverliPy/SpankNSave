@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/MerverliPy/SpankNSave/main/schemas/spank-n-save.schema.json",
+  "title": "SpankNSave configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "enabled": { "type": "boolean", "default": true },
+    "mode": { "enum": ["observe", "suggest", "enforce"], "default": "suggest" },
+    "notify": { "type": "boolean", "default": true },
+    "warningContextRatio": { "type": "number", "minimum": 0.05, "maximum": 0.99, "default": 0.7 },
+    "criticalContextRatio": { "type": "number", "minimum": 0.05, "maximum": 1, "default": 0.85 },
+    "maxToolOutputTokens": { "type": "integer", "minimum": 1, "default": 6000 },
+    "maxPromptTokens": { "type": "integer", "minimum": 1, "default": 4000 },
+    "maxSystemTokens": { "type": "integer", "minimum": 1, "default": 8000 },
+    "maxToolSchemaTokens": { "type": "integer", "minimum": 1, "default": 5000 },
+    "maxReasoningRatio": { "type": "number", "minimum": 0.05, "maximum": 1, "default": 0.55 },
+    "minReasoningTokens": { "type": "integer", "minimum": 1, "default": 4000 },
+    "maxAssistantOutputTokens": { "type": "integer", "minimum": 1, "default": 8000 },
+    "maxContextGrowthTokensPerTurn": { "type": "integer", "minimum": 1, "default": 12000 },
+    "duplicateToolCallThreshold": { "type": "integer", "minimum": 2, "maximum": 100, "default": 2 },
+    "maxToolObservationsPerSession": { "type": "integer", "minimum": 1, "default": 1000 },
+    "maxOutputTokens": { "type": "integer", "minimum": 1 },
+    "reportDirectory": { "type": "string", "minLength": 1, "default": ".opencode/spank-n-save/reports" },
+    "maxReports": { "type": "integer", "minimum": 1, "default": 100 },
+    "toastCooldownMs": { "type": "integer", "minimum": 1, "default": 30000 },
+    "charsPerTokenEstimate": { "type": "number", "minimum": 1, "maximum": 12, "default": 4 },
+    "truncationHeadRatio": { "type": "number", "minimum": 0.1, "maximum": 0.9, "default": 0.7 },
+    "enforcementToolAllowlist": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true, "default": [] },
+    "enforcementToolDenylist": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true, "default": [] }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "$schema": "../schemas/spank-n-save.schema.json",
+  "mode": "suggest",
+  "notify": true,
+  "warningContextRatio": 0.7,
+  "criticalContextRatio": 0.85,
+  "maxToolOutputTokens": 6000,
+  "maxPromptTokens": 4000,
+  "maxSystemTokens": 8000,
+  "maxToolSchemaTokens": 5000,
+  "maxReasoningRatio": 0.55,
+  "minReasoningTokens": 4000,
+  "maxAssistantOutputTokens": 8000,
+  "maxContextGrowthTokensPerTurn": 12000,
+  "duplicateToolCallThreshold": 2,
+  "reportDirectory": ".opencode/spank-n-save/reports",
+  "maxReports": 100,
+  "toastCooldownMs": 30000
+}

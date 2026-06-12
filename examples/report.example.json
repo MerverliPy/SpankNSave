@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-11T12:00:00.000Z",
+  "plugin": {
+    "name": "SpankNSave",
+    "version": "0.1.0",
+    "mode": "suggest"
+  },
+  "measurementPolicy": {
+    "authoritative": [
+      "provider-reported input, output, reasoning, cache, and cost fields",
+      "OpenCode model context limit"
+    ],
+    "estimated": [
+      "prompt component tokens",
+      "system instruction tokens",
+      "tool schema tokens",
+      "tool output attribution",
+      "potential token savings"
+    ],
+    "rawContentPersisted": false
+  },
+  "summary": {
+    "sessionID": "session-example",
+    "contextLimit": 128000,
+    "latestContextTokens": 108500,
+    "contextPercent": 85,
+    "cumulative": {
+      "input": 218000,
+      "output": 9100,
+      "reasoning": 12400,
+      "cacheRead": 36000,
+      "cacheWrite": 4000,
+      "cost": 2.41
+    },
+    "estimated": {
+      "latestPromptTokens": 760,
+      "systemTokens": 4200,
+      "enabledToolSchemaTokens": 8100
+    },
+    "toolCalls": 18,
+    "retries": 0,
+    "compactions": 0,
+    "filesChanged": 4
+  },
+  "findings": [
+    {
+      "severity": "critical",
+      "code": "CONTEXT_PRESSURE",
+      "cause": "The active request is consuming a high percentage of the model context window.",
+      "confidence": "high",
+      "evidence": {
+        "latestContextTokens": 108500,
+        "contextLimit": 128000,
+        "contextPercent": 85
+      },
+      "estimatedSavingsTokens": 48825,
+      "recommendation": "Compact completed work, preserve only active decisions and files, and move reusable procedures out of persistent context.",
+      "proposedPatch": {
+        "kind": "compaction",
+        "target": "active OpenCode session",
+        "summary": "Compact stale session context",
+        "change": "Run session compaction and retain the task, accepted decisions, active files, unresolved errors, and next actions only.",
+        "risk": "medium",
+        "autoApplicable": false
+      },
+      "priorityScore": 100
+    }
+  ]
+}

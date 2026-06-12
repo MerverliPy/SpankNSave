@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "spank-n-save",
+  "version": "0.1.0",
+  "description": "OpenCode plugin for detecting token overconsumption and producing ranked, reviewable optimization patches.",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "schemas",
+    "README.md",
+    "CHANGELOG.md",
+    "SECURITY.md"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format esm --dts --clean --sourcemap",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "check": "npm run typecheck && npm test",
+    "install:local": "node scripts/install-local.mjs"
+  },
+  "keywords": [
+    "opencode",
+    "plugin",
+    "tokens",
+    "context-window",
+    "llm-observability",
+    "cost-optimization"
+  ],
+  "author": "MerverliPy",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MerverliPy/SpankNSave.git"
+  },
+  "bugs": {
+    "url": "https://github.com/MerverliPy/SpankNSave/issues"
+  },
+  "homepage": "https://github.com/MerverliPy/SpankNSave#readme",
+  "engines": {
+    "node": ">=22"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.17.4"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.17.4",
+    "@types/node": "^22.15.0",
+    "tsup": "^8.5.0",
+    "typescript": "^5.8.3"
+  }
+}
