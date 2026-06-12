@@ -4,13 +4,17 @@ permissions:
   contents: read
 jobs:
   check:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        node: ["22", "24"]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v6
         with:
           show-progress: false
       - uses: actions/setup-node@cdca7365b2dadb8aad0a33bc7601856ffabcc48e # v4
         with:
-          node-version: 22
+          node-version: ${{ matrix.node }}
       - run: npm ci --silent
       - run: npm run check && npm run build

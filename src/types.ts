@@ -76,7 +76,7 @@ export type Finding = {
 
 export type SessionState = {
   contextLimit?: number
-  userPromptTokensEstimate: number
+  userTextPromptTokensEstimate: number
   systemTokensEstimate: number
   assistantMessages: Map<string, AssistantUsage>
   tools: ToolObservation[]
@@ -101,7 +101,7 @@ export type SessionSummary = {
     cost: number
   }
   estimated: {
-    latestPromptTokens: number
+    latestTextPromptTokens: number
     systemTokens: number
     enabledToolSchemaTokens: number
   }
@@ -119,6 +119,11 @@ export type AnalysisReport = {
     authoritative: string[]
     estimated: string[]
     rawContentPersisted: false
+    privacy: {
+      perMessageIdentifiers: "never-persisted"
+      toolArgHashes: "never-persisted"
+      rawPrompts: "never-persisted"
+    }
   }
   summary: SessionSummary
   findings: Finding[]

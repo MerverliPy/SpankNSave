@@ -10,9 +10,9 @@ import type {
   SpankNSaveConfig,
 } from "./types.ts"
 
-const severityWeight: Record<Severity, number> = { info: 20, warning: 60, critical: 90 }
-const confidenceWeight: Record<Confidence, number> = { low: 5, medium: 12, high: 20 }
-const riskPenalty: Record<Risk, number> = { low: 0, medium: 8, high: 18 }
+const severityWeight: Record<Severity, number> = { info: 20, warning: 50, critical: 85 }
+const confidenceFactor: Record<Confidence, number> = { low: 0.5, medium: 0.75, high: 1.0 }
+const riskPenalty: Record<Risk, number> = { low: 0, medium: 4, high: 10 }
 
 const scoreFinding = (
   severity: Severity,
@@ -20,11 +20,9 @@ const scoreFinding = (
   risk: Risk,
   estimatedSavingsTokens = 0,
 ): number => {
-  const savingsScore = Math.min(25, Math.round(Math.log10(Math.max(1, estimatedSavingsTokens)) * 6))
-  return Math.max(
-    0,
-    Math.min(100, severityWeight[severity] + confidenceWeight[confidence] + savingsScore - riskPenalty[risk]),
-  )
+  const base = severityWeight[severity] * confidenceFactor[confidence]
+  const savingsScore = Math.min(15, Math.round(Math.log10(Math.max(1, estimatedSavingsTokens)) * 4))
+  return Math.round(Math.max(0, Math.min(100, base + savingsScore - riskPenalty[risk])))
 }
 
 const finding = (input: Omit<Finding, "priorityScore">): Finding => {
@@ -58,6 +56,7 @@ export const analyzeSession = (
   config: SpankNSaveConfig,
   toolSchemaTokensEstimate: number,
   version: string,
+  generatedAt?: string,
 ): AnalysisReport => {
   const messages = [...state.assistantMessages.values()].sort((a, b) => a.createdAt - b.createdAt)
   const latest = [...messages].reverse().find((message) => totalTokens(message) > 0)
@@ -137,16 +136,16 @@ export const analyzeSession = (
     }
   }
 
-  if (state.userPromptTokensEstimate > config.maxPromptTokens) {
-    const savings = state.userPromptTokensEstimate - config.maxPromptTokens
+  if (state.userTextPromptTokensEstimate > config.maxPromptTokens) {
+    const savings = state.userTextPromptTokensEstimate - config.maxPromptTokens
     findings.push(
       finding({
         severity: "warning",
          code: "OVERSIZED_USER_PROMPT",
-        cause: "The latest user prompt is larger than the configured prompt budget.",
+        cause: "The latest user prompt (text-only estimate) is larger than the configured prompt budget.",
         confidence: "medium",
         evidence: {
-          promptTokensEstimate: state.userPromptTokensEstimate,
+          promptTokensEstimate: state.userTextPromptTokensEstimate,
           budget: config.maxPromptTokens,
         },
         estimatedSavingsTokens: savings,
@@ -369,12 +368,14 @@ export const analyzeSession = (
 
   findings.sort((left, right) => {
     if (right.priorityScore !== left.priorityScore) return right.priorityScore - left.priorityScore
-    return (right.estimatedSavingsTokens ?? 0) - (left.estimatedSavingsTokens ?? 0)
+    const savingsDiff = (right.estimatedSavingsTokens ?? 0) - (left.estimatedSavingsTokens ?? 0)
+    if (savingsDiff !== 0) return savingsDiff
+    return left.code.localeCompare(right.code)
   })
 
   return {
     schemaVersion: 1,
-    generatedAt: new Date().toISOString(),
+    generatedAt: generatedAt ?? new Date().toISOString(),
     plugin: { name: "SpankNSave", version, mode: config.mode },
     measurementPolicy: {
       authoritative: [
@@ -382,13 +383,18 @@ export const analyzeSession = (
         "OpenCode model context limit",
       ],
       estimated: [
-        "prompt component tokens",
+        "prompt component tokens (text-only estimate; non-text parts are not measured)",
         "system instruction tokens",
         "tool schema tokens (upper-bound from tools observed in this session; may include definitions loaded outside the session)",
         "tool output attribution",
         "potential token savings",
       ],
       rawContentPersisted: false,
+      privacy: {
+        perMessageIdentifiers: "never-persisted",
+        toolArgHashes: "never-persisted",
+        rawPrompts: "never-persisted",
+      },
     },
     summary: {
       sessionID,
@@ -397,7 +403,7 @@ export const analyzeSession = (
       contextPercent: contextRatio === undefined ? undefined : Math.round(contextRatio * 100),
       cumulative,
       estimated: {
-        latestPromptTokens: state.userPromptTokensEstimate,
+        latestTextPromptTokens: state.userTextPromptTokensEstimate,
         systemTokens: state.systemTokensEstimate,
         enabledToolSchemaTokens: toolSchemaTokensEstimate,
       },

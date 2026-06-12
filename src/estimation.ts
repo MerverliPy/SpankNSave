@@ -42,11 +42,14 @@ export const truncateMiddle = (
     return { text, truncated: false, originalTokensEstimate }
   }
 
-  const maxChars = Math.max(256, Math.floor(maximumTokens * charsPerToken))
+  const maxChars = Math.floor(maximumTokens * charsPerToken)
   const clampedRatio = Math.min(0.9, Math.max(0.1, headRatio))
   const marker =
     "\n\n[SpankNSave truncated the middle of this tool result. Narrow the query or request a smaller range.]\n\n"
-  const contentBudget = Math.max(64, maxChars - marker.length)
+  const contentBudget = maxChars - marker.length
+  if (contentBudget < 1) {
+    return { text: marker.trim(), truncated: true, originalTokensEstimate }
+  }
   const headChars = Math.floor(contentBudget * clampedRatio)
   const tailChars = contentBudget - headChars
 

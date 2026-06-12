@@ -14,6 +14,11 @@ const report = (sessionID: string, ageMinutes = 0): AnalysisReport => ({
     authoritative: [],
     estimated: [],
     rawContentPersisted: false,
+    privacy: {
+      perMessageIdentifiers: "never-persisted",
+      toolArgHashes: "never-persisted",
+      rawPrompts: "never-persisted",
+    },
   },
   summary: {
     sessionID,
@@ -21,7 +26,7 @@ const report = (sessionID: string, ageMinutes = 0): AnalysisReport => ({
     latestContextTokens: 1_000,
     cumulative: { input: 1_000, output: 500, reasoning: 100, cacheRead: 0, cacheWrite: 0, cost: 0.01 },
     estimated: {
-      latestPromptTokens: 200,
+      latestTextPromptTokens: 200,
       systemTokens: 100,
       enabledToolSchemaTokens: 0,
     },

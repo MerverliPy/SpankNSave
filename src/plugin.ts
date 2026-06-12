@@ -20,7 +20,7 @@ const getState = (states: Map<string, SessionState>, sessionID: string): Session
   }
 
   const created: SessionState = {
-    userPromptTokensEstimate: 0,
+    userTextPromptTokensEstimate: 0,
     systemTokensEstimate: 0,
     assistantMessages: new Map(),
     tools: [],
@@ -155,6 +155,7 @@ export const SpankNSave: Plugin = async ({ client, directory }) => {
       config,
       schemaTokens,
       SPANK_N_SAVE_VERSION,
+      new Date().toISOString(),
     )
 
     try {
@@ -222,7 +223,7 @@ export const SpankNSave: Plugin = async ({ client, directory }) => {
   return {
     "chat.message": async (input, output) => {
       const state = getState(states, input.sessionID)
-      state.userPromptTokensEstimate = textTokenEstimate(
+      state.userTextPromptTokensEstimate = textTokenEstimate(
         output.parts,
         config.charsPerTokenEstimate,
       )
@@ -349,6 +350,11 @@ export const SpankNSave: Plugin = async ({ client, directory }) => {
       }
 
       if (event.type === "session.deleted") {
+        try {
+          await persistReport(event.properties.info.id)
+        } catch {
+          // Fail-open: persist failure must not prevent cleanup.
+        }
         states.delete(event.properties.info.id)
       }
     },

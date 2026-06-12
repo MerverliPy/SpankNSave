@@ -121,7 +121,7 @@ test("dispose persists all active sessions", async () => {
   assert.equal(reports.length, 2)
 })
 
-test("session deleted removes state without persisting", async () => {
+test("session deleted persists before removing state", async () => {
   const directory = await mkdtemp(join(tmpdir(), "plugin-test-"))
   await mkdir(join(directory, ".opencode"), { recursive: true })
   await writeFile(
@@ -140,11 +140,40 @@ test("session deleted removes state without persisting", async () => {
   await hooks.event?.({ event: { type: "message.updated", properties: { info: { id: "m1", sessionID: "del-me", role: "assistant", time: { created: 1 }, providerID: "p", modelID: "m", cost: 0, tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } } } } } } as never)
   await hooks.event?.({ event: { type: "session.deleted", properties: { info: { id: "del-me" } } } } as never)
 
-  await hooks.dispose?.()
-
+  // Session deleted should persist the final report before removing state
   const entries = await readdir(join(directory, "reports"))
   const reports = entries.filter((n) => n.startsWith("spanknsave-") && n.endsWith(".json"))
-  assert.equal(reports.length, 0)
+  assert.equal(reports.length, 1)
+
+  // After deletion, idle should not crash or persist again
+  await hooks.event?.({ event: { type: "session.idle", properties: { sessionID: "del-me" } } } as never)
+})
+
+test("session deleted does not persist when persistReport fails", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "plugin-test-"))
+  await mkdir(join(directory, ".opencode"), { recursive: true })
+  // Use a report directory path where a parent is a file to force write failure
+  const parentFile = join(directory, "block")
+  await writeFile(parentFile, "block")
+  await writeFile(
+    join(directory, ".opencode", "spank-n-save.json"),
+    JSON.stringify({ mode: "suggest", reportDirectory: join(parentFile, "reports") }),
+  )
+
+  const hooks = await SpankNSave({
+    directory,
+    client: {
+      app: { log: async () => undefined },
+      tui: { showToast: async () => undefined },
+    },
+  } as never)
+
+  await hooks.event?.({ event: { type: "message.updated", properties: { info: { id: "m1", sessionID: "s", role: "assistant", time: { created: 1 }, providerID: "p", modelID: "m", cost: 0, tokens: { input: 100, output: 50, reasoning: 0, cache: { read: 0, write: 0 } } } } } } as never)
+  // This should not throw even though persist will fail
+  await hooks.event?.({ event: { type: "session.deleted", properties: { info: { id: "s" } } } } as never)
+
+  // dispose should also not throw
+  await hooks.dispose?.()
 })
 
 test("message removal updates assistant history", async () => {

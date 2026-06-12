@@ -5,6 +5,7 @@ import { join } from "node:path"
 import test from "node:test"
 import { analyzeSession } from "../src/analysis.ts"
 import { DEFAULT_CONFIG, loadConfig, normalizeConfig, shouldEnforceTool } from "../src/config.ts"
+import { estimateTokens, truncateMiddle } from "../src/estimation.ts"
 import { pruneReports, writeReport } from "../src/reporting.ts"
 import { SpankNSave } from "../src/plugin.ts"
 import type { AnalysisReport, AssistantUsage, SessionState } from "../src/types.ts"
@@ -43,8 +44,8 @@ test("P1-01: pruning with maxReports=1 keeps newest only", async () => {
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
     plugin: { name: "SpankNSave", version: "0.1.0", mode: "suggest" },
-    measurementPolicy: { authoritative: [], estimated: [], rawContentPersisted: false },
-    summary: { sessionID: id, contextLimit: 10000, latestContextTokens: 1000, cumulative: { input: 1000, output: 500, reasoning: 0, cacheRead: 0, cacheWrite: 0, cost: 0 }, estimated: { latestPromptTokens: 100, systemTokens: 100, enabledToolSchemaTokens: 0 }, toolCalls: 0, retries: 0, compactions: 0, filesChanged: 0 },
+    measurementPolicy: { authoritative: [], estimated: [], rawContentPersisted: false, privacy: { perMessageIdentifiers: "never-persisted", toolArgHashes: "never-persisted", rawPrompts: "never-persisted" } },
+    summary: { sessionID: id, contextLimit: 10000, latestContextTokens: 1000, cumulative: { input: 1000, output: 500, reasoning: 0, cacheRead: 0, cacheWrite: 0, cost: 0 }, estimated: { latestTextPromptTokens: 100, systemTokens: 100, enabledToolSchemaTokens: 0 }, toolCalls: 0, retries: 0, compactions: 0, filesChanged: 0 },
     findings: [],
   })
 
@@ -117,7 +118,7 @@ test("P1-02: loadConfig handles legacy migration path", async () => {
 test("P1-03: tool schema not attributed to session without tool usage", () => {
   const state: SessionState = {
     contextLimit: 10000,
-    userPromptTokensEstimate: 100,
+    userTextPromptTokensEstimate: 100,
     systemTokensEstimate: 100,
     assistantMessages: new Map(),
     tools: [],
@@ -139,7 +140,7 @@ test("P1-03: tool schema zero for session with unused tools", () => {
   // The plugin computes this, test via the analysis directly
   const state: SessionState = {
     contextLimit: 10000,
-    userPromptTokensEstimate: 100,
+    userTextPromptTokensEstimate: 100,
     systemTokensEstimate: 100,
     assistantMessages: new Map(),
     tools: [],
@@ -159,7 +160,7 @@ test("P1-03: tool schema zero for session with unused tools", () => {
 test("P1-04: assistantMessages cap works with out-of-order insertion", () => {
   const state: SessionState = {
     contextLimit: 10000,
-    userPromptTokensEstimate: 100,
+    userTextPromptTokensEstimate: 100,
     systemTokensEstimate: 100,
     assistantMessages: new Map(),
     tools: [],
@@ -195,7 +196,7 @@ test("P1-04: assistantMessages cap works with out-of-order insertion", () => {
 test("P1-04: RAPID_CONTEXT_GROWTH uses correct message ordering after cap", () => {
   const state: SessionState = {
     contextLimit: 10000,
-    userPromptTokensEstimate: 100,
+    userTextPromptTokensEstimate: 100,
     systemTokensEstimate: 100,
     assistantMessages: new Map([
       ["m1", { id: "m1", sessionID: "s", createdAt: 1, providerID: "p", modelID: "m", cost: 0, input: 2000, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }],
@@ -256,7 +257,7 @@ test("P1-06: package-lock.json exists and is not empty", async () => {
 test("P1-07: duplicate tool detection with >2 duplicates", () => {
   const state: SessionState = {
     contextLimit: 10000,
-    userPromptTokensEstimate: 100,
+    userTextPromptTokensEstimate: 100,
     systemTokensEstimate: 100,
     assistantMessages: new Map(),
     tools: [
@@ -280,7 +281,7 @@ test("P1-07: duplicate tool detection with >2 duplicates", () => {
 test("P1-07: duplicate tool with different tools same hash not merged", () => {
   const state: SessionState = {
     contextLimit: 10000,
-    userPromptTokensEstimate: 100,
+    userTextPromptTokensEstimate: 100,
     systemTokensEstimate: 100,
     assistantMessages: new Map(),
     tools: [
@@ -304,7 +305,7 @@ test("P1-07: duplicate tool with different tools same hash not merged", () => {
 test("P1-07: context percent boundary at exact threshold", () => {
   const state: SessionState = {
     contextLimit: 10_000,
-    userPromptTokensEstimate: 100,
+    userTextPromptTokensEstimate: 100,
     systemTokensEstimate: 100,
     assistantMessages: new Map([["m1", { id: "m1", sessionID: "s", createdAt: 1, providerID: "p", modelID: "m", cost: 0, input: 7000, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 }]]),
     tools: [],
@@ -327,7 +328,7 @@ test("P1-07: HIGH_REASONING_SHARE at exact ratio boundary", () => {
   // So reasoning=123, output=100 => ratio=123/223≈0.552 > 0.55
   const state: SessionState = {
     contextLimit: 10000,
-    userPromptTokensEstimate: 100,
+    userTextPromptTokensEstimate: 100,
     systemTokensEstimate: 100,
     assistantMessages: new Map([["m1", { id: "m1", sessionID: "s", createdAt: 1, providerID: "p", modelID: "m", cost: 0, input: 0, output: 100, reasoning: 5000, cacheRead: 0, cacheWrite: 0 }]]),
     tools: [],
@@ -392,7 +393,7 @@ test("lifecycle: dispose clears all state after persisting", async () => {
   // (though in practice dispose is only called once)
 })
 
-test("lifecycle: session deleted then idle does not persist", async () => {
+test("lifecycle: session deleted persists before cleanup, idle after delete is safe", async () => {
   const dir = await mkdtemp(join(tmpdir(), "edge-"))
   await mkdir(join(dir, ".opencode"), { recursive: true })
   await writeFile(
@@ -414,5 +415,90 @@ test("lifecycle: session deleted then idle does not persist", async () => {
 
   const entries = await readdir(join(dir, "reports"))
   const reports = entries.filter((n) => n.startsWith("spanknsave-") && n.endsWith(".json"))
-  assert.equal(reports.length, 0)
+  assert.equal(reports.length, 1)
+})
+
+// ── P2-01: guaranteed tool-output caps ─────────────────────────────────────
+
+test("P2-01: small configured caps are enforceable", () => {
+  const source = "HEAD-" + "x".repeat(500) + "-TAIL"
+  // 10 tokens * 4 chars = 40 chars max. Marker is ~119 chars, so content budget < 0
+  const result = truncateMiddle(source, 10, 4)
+  assert.equal(result.truncated, true)
+  assert.ok(result.text.includes("SpankNSave truncated"))
+  // Even with a tiny cap, the result is not the full input
+  assert.ok(result.text.length < source.length)
+})
+
+test("P2-01: truncateMiddle respects configured cap at boundary", () => {
+  const source = "A".repeat(200)
+  const tokens = estimateTokens(source, 4) // 200/4 = 50 tokens
+  const cap = tokens // exact match — should NOT truncate
+  const result = truncateMiddle(source, cap, 4)
+  assert.equal(result.truncated, false)
+})
+
+test("P2-01: truncateMiddle with very low cap produces only marker", () => {
+  const source = "X".repeat(1000)
+  // 1 token * 4 chars = 4 chars, marker is ~119 chars
+  const result = truncateMiddle(source, 1, 4)
+  assert.equal(result.truncated, true)
+  assert.ok(result.text.includes("SpankNSave truncated"))
+})
+
+test("P2-01: truncateMiddle with minimum valid charsPerToken", () => {
+  const source = "A".repeat(50)
+  const result = truncateMiddle(source, 5, 1)
+  assert.equal(result.truncated, true)
+  assert.ok(result.text.includes("SpankNSave truncated"))
+})
+
+// ── P2-03: privacy alignment ───────────────────────────────────────────────
+
+test("P2-03: reports never contain provider or model identifiers", () => {
+  const state: SessionState = {
+    contextLimit: 10000,
+    userTextPromptTokensEstimate: 100,
+    systemTokensEstimate: 100,
+    assistantMessages: new Map([
+      ["m1", { id: "m1", sessionID: "s", createdAt: 1, providerID: "openai", modelID: "gpt-5", cost: 0.01, input: 5000, output: 2000, reasoning: 500, cacheRead: 0, cacheWrite: 0 }]
+    ]),
+    tools: [
+      { callID: "c1", tool: "bash", argsHash: "abc123def456", outputChars: 100, outputTokensEstimate: 25, truncated: false, observedAt: 1 },
+    ],
+    retries: 0,
+    compactions: 0,
+    filesChangedCount: 0,
+    lastToastAt: 0,
+    lastActivityAt: 0,
+  }
+  const report = analyzeSession("s", state, DEFAULT_CONFIG, 0, "0.1.0")
+  const json = JSON.stringify(report)
+  // Provider/model IDs from in-memory state must not leak into serialized report
+  assert.ok(!json.includes("openai"))
+  assert.ok(!json.includes("gpt-5"))
+  // Tool arg hashes must not leak
+  assert.ok(!json.includes("abc123def456"))
+  // Privacy policy is explicit
+  assert.equal(report.measurementPolicy.privacy.perMessageIdentifiers, "never-persisted")
+  assert.equal(report.measurementPolicy.privacy.toolArgHashes, "never-persisted")
+  assert.equal(report.measurementPolicy.privacy.rawPrompts, "never-persisted")
+})
+
+test("P2-03: report privacy policy is present in every report", () => {
+  const s: SessionState = {
+    contextLimit: 10000,
+    userTextPromptTokensEstimate: 100,
+    systemTokensEstimate: 100,
+    assistantMessages: new Map(),
+    tools: [],
+    retries: 0,
+    compactions: 0,
+    filesChangedCount: 0,
+    lastToastAt: 0,
+    lastActivityAt: 0,
+  }
+  const report = analyzeSession("s", s, DEFAULT_CONFIG, 0, "0.1.0")
+  assert.ok(report.measurementPolicy.privacy)
+  assert.equal(report.measurementPolicy.rawContentPersisted, false)
 })

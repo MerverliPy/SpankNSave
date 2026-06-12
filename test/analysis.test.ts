@@ -23,7 +23,7 @@ const makeMessage = (overrides: Partial<AssistantUsage> = {}): [string, Assistan
 
 const state = (overrides: Partial<SessionState> = {}): SessionState => ({
   contextLimit: overrides.contextLimit ?? 10_000,
-  userPromptTokensEstimate: overrides.userPromptTokensEstimate ?? 100,
+  userTextPromptTokensEstimate: overrides.userTextPromptTokensEstimate ?? 100,
   systemTokensEstimate: overrides.systemTokensEstimate ?? 100,
   assistantMessages: overrides.assistantMessages ?? new Map(),
   tools: overrides.tools ?? [],
@@ -72,7 +72,7 @@ test("CONTEXT_PRESSURE with zero context tokens (no total)", () => {
 test("CONTEXT_PRESSURE without context limit", () => {
   const s: SessionState = {
     contextLimit: undefined,
-    userPromptTokensEstimate: 100,
+    userTextPromptTokensEstimate: 100,
     systemTokensEstimate: 100,
     assistantMessages: new Map([makeMessage({ input: 9500, output: 500 })]),
     tools: [],
@@ -117,17 +117,17 @@ test("RAPID_CONTEXT_GROWTH single message (no previous)", () => {
 // ── OVERSIZED_USER_PROMPT ─────────────────────────────────────────────────
 
 test("OVERSIZED_USER_PROMPT positive case", () => {
-  const s = state({ userPromptTokensEstimate: 10_000 })
+  const s = state({ userTextPromptTokensEstimate: 10_000 })
   assert.ok(reportsFindings(s).includes("OVERSIZED_USER_PROMPT"))
 })
 
 test("OVERSIZED_USER_PROMPT within budget", () => {
-  const s = state({ userPromptTokensEstimate: 500 })
+  const s = state({ userTextPromptTokensEstimate: 500 })
   assert.ok(!reportsFindings(s).includes("OVERSIZED_USER_PROMPT"))
 })
 
 test("OVERSIZED_USER_PROMPT at exact budget", () => {
-  const s = state({ userPromptTokensEstimate: DEFAULT_CONFIG.maxPromptTokens })
+  const s = state({ userTextPromptTokensEstimate: DEFAULT_CONFIG.maxPromptTokens })
   assert.ok(!reportsFindings(s).includes("OVERSIZED_USER_PROMPT"))
 })
 
@@ -343,7 +343,7 @@ test("findings sorted by priorityScore descending", () => {
     ],
     retries: 3,
     systemTokensEstimate: 10_000,
-    userPromptTokensEstimate: 10_000,
+    userTextPromptTokensEstimate: 10_000,
   })
   const findings = analyzeSession("s", s, DEFAULT_CONFIG, 0, "0.1.0").findings
   for (let i = 1; i < findings.length; i++) {
@@ -387,7 +387,7 @@ test("finding codes are stable strings", () => {
       { callID: "2", tool: "bash", argsHash: "h1", outputChars: 200, outputTokensEstimate: 10_000, truncated: false, observedAt: 2 },
     ],
     retries: 5,
-    userPromptTokensEstimate: 10_000,
+    userTextPromptTokensEstimate: 10_000,
     systemTokensEstimate: 10_000,
   })
   const findings = analyzeSession("s", s, DEFAULT_CONFIG, 8_000, "0.1.0").findings
@@ -458,4 +458,37 @@ test("enabledToolSchemaTokens appears in estimated summary", () => {
   const s = state()
   const report = analyzeSession("s", s, DEFAULT_CONFIG, 5_000, "0.1.0")
   assert.equal(report.summary.estimated.enabledToolSchemaTokens, 5_000)
+})
+
+// ── P2-04: report time injection ───────────────────────────────────────────
+
+test("P2-04: injected generatedAt produces deterministic reports", () => {
+  const s = state({
+    assistantMessages: new Map([makeMessage({ input: 5000, output: 2000 })]),
+    retries: 3,
+  })
+  const now = "2026-06-12T10:00:00.000Z"
+  const r1 = analyzeSession("s", s, DEFAULT_CONFIG, 0, "0.1.0", now)
+  const r2 = analyzeSession("s", s, DEFAULT_CONFIG, 0, "0.1.0", now)
+  assert.deepEqual(r1, r2)
+})
+
+test("P2-04: omitted generatedAt defaults to current time", () => {
+  const s = state()
+  const report = analyzeSession("s", s, DEFAULT_CONFIG, 0, "0.1.0")
+  assert.ok(report.generatedAt)
+  assert.ok(Date.parse(report.generatedAt) > 0)
+})
+
+test("P2-04: different generatedAt produces reports differing only in time", () => {
+  const s = state({
+    assistantMessages: new Map([makeMessage({ input: 5000, output: 2000 })]),
+    retries: 3,
+  })
+  const r1 = analyzeSession("s", s, DEFAULT_CONFIG, 0, "0.1.0", "2026-01-01T00:00:00.000Z")
+  const r2 = analyzeSession("s", s, DEFAULT_CONFIG, 0, "0.1.0", "2026-06-12T00:00:00.000Z")
+  assert.notEqual(r1.generatedAt, r2.generatedAt)
+  // Everything else should match
+  assert.deepEqual(r1.findings, r2.findings)
+  assert.deepEqual(r1.summary, r2.summary)
 })

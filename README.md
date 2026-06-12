@@ -98,7 +98,7 @@ Clone and build:
 ```bash
 git clone https://github.com/MerverliPy/SpankNSave.git
 cd SpankNSave
-npm install
+npm ci
 npm run check
 npm run build
 ```
@@ -210,7 +210,7 @@ The denylist takes precedence over the allowlist.
 ## Development
 
 ```bash
-npm install
+npm ci
 npm run typecheck
 npm test
 npm run build
@@ -231,7 +231,7 @@ Deterministic detectors
         │
         ▼
 Priority scoring
-(severity × confidence × savings − risk)
+(severity × confidence + savings − risk)
         │
         ▼
 JSON report + TUI recommendation
