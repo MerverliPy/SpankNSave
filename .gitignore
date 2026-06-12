@@ -1,0 +1,7 @@
+node_modules/
+dist/
+coverage/
+*.log
+.DS_Store
+.opencode/spank-n-save/reports/
+.opencode/token-guard/reports/
