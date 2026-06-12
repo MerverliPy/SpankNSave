@@ -9,7 +9,8 @@
     "noUncheckedIndexedAccess": true,
     "skipLibCheck": true,
     "types": ["node"],
-    "noEmit": true
+    "noEmit": true,
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*.ts", "test/**/*.ts", ".opencode/plugins/**/*.ts"]
 }

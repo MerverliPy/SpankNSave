@@ -5,7 +5,7 @@
 ```bash
 git clone https://github.com/MerverliPy/SpankNSave.git
 cd SpankNSave
-npm install
+npm ci
 npm run check
 npm run build
 ```

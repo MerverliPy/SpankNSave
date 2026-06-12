@@ -139,7 +139,8 @@ const readJson = async (path: string): Promise<unknown | undefined> => {
     return JSON.parse(await readFile(path, "utf8"))
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
-    if (code === "ENOENT") return undefined
+    if (code === "ENOENT" || code === "EACCES" || code === "EPERM") return undefined
+    if (error instanceof SyntaxError) return undefined
     throw new Error(`Unable to read SpankNSave configuration at ${path}: ${(error as Error).message}`)
   }
 }

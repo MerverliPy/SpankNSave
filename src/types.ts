@@ -82,8 +82,9 @@ export type SessionState = {
   tools: ToolObservation[]
   retries: number
   compactions: number
-  filesChanged: Set<string>
+  filesChangedCount: number
   lastToastAt: number
+  lastActivityAt: number
 }
 
 export type SessionSummary = {

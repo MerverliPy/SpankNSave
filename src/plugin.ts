@@ -3,15 +3,21 @@ import type { AssistantMessage, Part } from "@opencode-ai/sdk"
 import { mkdir } from "node:fs/promises"
 import { isAbsolute, join } from "node:path"
 import { analyzeSession } from "./analysis.ts"
-import { loadConfig, shouldEnforceTool } from "./config.ts"
+import { DEFAULT_CONFIG, loadConfig, shouldEnforceTool } from "./config.ts"
 import { estimateTokens, stableHash, truncateMiddle } from "./estimation.ts"
 import { pruneReports, writeReport } from "./reporting.ts"
 import type { AssistantUsage, SessionState } from "./types.ts"
 import { SPANK_N_SAVE_VERSION } from "./version.ts"
 
+const MAX_TRACKED_SESSIONS = 50
+const MAX_ASSISTANT_MESSAGES = 2
+
 const getState = (states: Map<string, SessionState>, sessionID: string): SessionState => {
   const existing = states.get(sessionID)
-  if (existing) return existing
+  if (existing) {
+    existing.lastActivityAt = Date.now()
+    return existing
+  }
 
   const created: SessionState = {
     userPromptTokensEstimate: 0,
@@ -20,8 +26,9 @@ const getState = (states: Map<string, SessionState>, sessionID: string): Session
     tools: [],
     retries: 0,
     compactions: 0,
-    filesChanged: new Set(),
+    filesChangedCount: 0,
     lastToastAt: 0,
+    lastActivityAt: Date.now(),
   }
   states.set(sessionID, created)
   return created
@@ -52,13 +59,9 @@ const normalizeAssistantMessage = (message: AssistantMessage): AssistantUsage =>
 })
 
 export const SpankNSave: Plugin = async ({ client, directory }) => {
-  const loaded = await loadConfig(directory)
-  const config = loaded.config
-  const states = new Map<string, SessionState>()
-  const toolSchemaEstimates = new Map<string, number>()
-  const reportDirectory = isAbsolute(config.reportDirectory)
-    ? config.reportDirectory
-    : join(directory, config.reportDirectory)
+  let config = DEFAULT_CONFIG
+  let reportDirectory = ""
+  const initWarnings: string[] = []
 
   const log = async (
     level: "debug" | "info" | "warn" | "error",
@@ -79,20 +82,54 @@ export const SpankNSave: Plugin = async ({ client, directory }) => {
     }
   }
 
+  // Phase 1: Load configuration with full safety boundary.
+  try {
+    const loaded = await loadConfig(directory)
+    config = loaded.config
+
+    if (loaded.migratedFrom) {
+      initWarnings.push(
+        `Loaded legacy configuration from ${loaded.migratedFrom}. Migrate to ${loaded.path}.`,
+      )
+    }
+  } catch (error) {
+    config = { ...DEFAULT_CONFIG, mode: "observe" }
+    initWarnings.push(
+      `Failed to load configuration: ${error instanceof Error ? error.message : String(error)}. Using safe defaults in observe mode.`,
+    )
+  }
+
+  // Phase 2: Resolve and validate report directory path.
+  reportDirectory = isAbsolute(config.reportDirectory)
+    ? config.reportDirectory
+    : join(directory, config.reportDirectory)
+
+  // Phase 3: Log initialization events regardless of enabled state.
   if (!config.enabled) {
     await log("info", "SpankNSave is disabled by configuration.")
+    for (const warning of initWarnings) await log("warn", warning)
     return {}
   }
 
-  await mkdir(reportDirectory, { recursive: true })
-  await pruneReports(reportDirectory, config.maxReports)
-
-  if (loaded.migratedFrom) {
-    await log("warn", "Loaded legacy OpenCode Token Guard configuration.", {
-      legacyPath: loaded.migratedFrom,
-      preferredPath: loaded.path,
-    })
+  // Phase 4: Create report directory and prune (non-fatal).
+  try {
+    await mkdir(reportDirectory, { recursive: true })
+  } catch (error) {
+    initWarnings.push(
+      `Unable to create report directory at ${reportDirectory}: ${error instanceof Error ? error.message : String(error)}. Reports will not be saved.`,
+    )
   }
+
+  try {
+    await pruneReports(reportDirectory, config.maxReports)
+  } catch (error) {
+    initWarnings.push(
+      `Report pruning failed: ${error instanceof Error ? error.message : String(error)}.`,
+    )
+  }
+
+  // Phase 5: Report initialization outcome.
+  for (const warning of initWarnings) await log("warn", warning)
 
   await log("info", "SpankNSave initialized.", {
     version: SPANK_N_SAVE_VERSION,
@@ -100,11 +137,18 @@ export const SpankNSave: Plugin = async ({ client, directory }) => {
     reportDirectory,
   })
 
+  const states = new Map<string, SessionState>()
+  const toolSchemaEstimates = new Map<string, number>()
+
   const persistReport = async (sessionID: string): Promise<void> => {
     const state = states.get(sessionID)
     if (!state) return
 
-    const schemaTokens = [...toolSchemaEstimates.values()].reduce((sum, value) => sum + value, 0)
+    const sessionToolIDs = new Set(state.tools.map((entry) => entry.tool))
+    const schemaTokens = [...sessionToolIDs].reduce(
+      (sum, toolID) => sum + (toolSchemaEstimates.get(toolID) ?? 0),
+      0,
+    )
     const report = analyzeSession(
       sessionID,
       state,
@@ -156,6 +200,22 @@ export const SpankNSave: Plugin = async ({ client, directory }) => {
       await log("debug", "TUI notification was unavailable.", {
         error: error instanceof Error ? error.message : String(error),
       })
+    }
+  }
+
+  const evictLRU = async (): Promise<void> => {
+    if (states.size <= MAX_TRACKED_SESSIONS) return
+    let oldestID: string | undefined
+    let oldestTime = Infinity
+    for (const [id, s] of states) {
+      if (s.lastActivityAt < oldestTime) {
+        oldestTime = s.lastActivityAt
+        oldestID = id
+      }
+    }
+    if (oldestID) {
+      await persistReport(oldestID)
+      states.delete(oldestID)
     }
   }
 
@@ -242,10 +302,20 @@ export const SpankNSave: Plugin = async ({ client, directory }) => {
       if (event.type === "message.updated") {
         const message = event.properties.info
         if (message.role === "assistant") {
-          getState(states, message.sessionID).assistantMessages.set(
+          const state = getState(states, message.sessionID)
+          state.assistantMessages.set(
             message.id,
             normalizeAssistantMessage(message),
           )
+          // Cap retained messages: only keep the most recent entries.
+          if (state.assistantMessages.size > MAX_ASSISTANT_MESSAGES) {
+            const sorted = [...state.assistantMessages.entries()]
+              .sort(([, a], [, b]) => a.createdAt - b.createdAt)
+            for (let i = 0; i < sorted.length - MAX_ASSISTANT_MESSAGES; i++) {
+              const [id] = sorted[i]!
+              state.assistantMessages.delete(id)
+            }
+          }
         }
         return
       }
@@ -263,7 +333,7 @@ export const SpankNSave: Plugin = async ({ client, directory }) => {
 
       if (event.type === "session.diff") {
         const state = getState(states, event.properties.sessionID)
-        for (const diff of event.properties.diff) state.filesChanged.add(diff.file)
+        state.filesChangedCount += event.properties.diff.length
         return
       }
 
@@ -274,6 +344,7 @@ export const SpankNSave: Plugin = async ({ client, directory }) => {
 
       if (event.type === "session.idle") {
         await persistReport(event.properties.sessionID)
+        await evictLRU()
         return
       }
 

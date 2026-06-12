@@ -2,6 +2,8 @@
   "$schema": "https://json.schemastore.org/package.json",
   "name": "spank-n-save",
   "version": "0.1.0",
+  "license": "MIT",
+  "packageManager": "npm@10.9.8",
   "description": "OpenCode plugin for detecting token overconsumption and producing ranked, reviewable optimization patches.",
   "type": "module",
   "sideEffects": false,

@@ -196,7 +196,7 @@ export const analyzeSession = (
         severity: "warning",
         code: "TOOL_SCHEMA_BLOAT",
         cause: "Enabled tool definitions consume a large estimated portion of every model request.",
-        confidence: "medium",
+        confidence: "low",
         evidence: {
           toolSchemaTokensEstimate,
           budget: config.maxToolSchemaTokens,
@@ -384,7 +384,7 @@ export const analyzeSession = (
       estimated: [
         "prompt component tokens",
         "system instruction tokens",
-        "tool schema tokens",
+        "tool schema tokens (upper-bound from tools observed in this session; may include definitions loaded outside the session)",
         "tool output attribution",
         "potential token savings",
       ],
@@ -404,7 +404,7 @@ export const analyzeSession = (
       toolCalls: state.tools.length,
       retries: state.retries,
       compactions: state.compactions,
-      filesChanged: state.filesChanged.size,
+      filesChanged: state.filesChangedCount,
     },
     findings,
   }
