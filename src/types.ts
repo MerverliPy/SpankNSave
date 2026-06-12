@@ -12,7 +12,7 @@ export type SpankNSaveConfig = {
   maxToolOutputTokens: number
   maxPromptTokens: number
   maxSystemTokens: number
-  maxToolSchemaTokens: numbr
+  maxToolSchemaTokens: number
   maxReasoningRatio: number
   minReasoningTokens: number
   maxAssistantOutputTokens: number
@@ -113,11 +113,7 @@ export type SessionSummary = {
 export type AnalysisReport = {
   schemaVersion: 1
   generatedAt: string
-  plugin: {
-    name: "SpankNSave"
-    version: string
-    mode: Mode
-  }
+  plugin: { name: "SpankNSave"; version: string; mode: Mode }
   measurementPolicy: {
     authoritative: string[]
     estimated: string[]
