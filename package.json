@@ -26,7 +26,19 @@
     "test": "node --experimental-strip-types --test test/*.test.ts",
     "test:coverage": "node --experimental-strip-types --experimental-test-coverage --test test/*.test.ts",
     "check": "npm run typecheck && npm test",
-    "install:local": "node scripts/install-local.mjs"
+    "install:local": "node scripts/install-local.mjs",
+    "benchmark:fixtures": "node --experimental-strip-types benchmark/generate-detector-fixtures.ts",
+    "benchmark:detectors": "node --experimental-strip-types benchmark/detector-accuracy.ts",
+    "benchmark:detectors:human": "node --experimental-strip-types benchmark/human-detector-evaluation.ts",
+    "benchmark:performance": "node --expose-gc --experimental-strip-types benchmark/performance.ts",
+    "benchmark:privacy": "node --experimental-strip-types benchmark/privacy.ts",
+    "benchmark:calibration:corpus": "node --experimental-strip-types benchmark/generate-calibration-corpus.ts",
+    "benchmark:calibration:collect": "node --experimental-strip-types benchmark/collect-token-counts.ts",
+    "benchmark:calibration:analyze": "node --experimental-strip-types benchmark/token-calibration.ts",
+    "benchmark:paired:run": "node --experimental-strip-types benchmark/paired/run.ts",
+    "benchmark:paired:summarize": "node --experimental-strip-types benchmark/paired/summarize.ts",
+    "benchmark:publish": "node --experimental-strip-types benchmark/publish-results.ts",
+    "benchmark:local": "npm run benchmark:fixtures && npm run benchmark:detectors && npm run benchmark:performance && npm run benchmark:privacy"
   },
   "keywords": [
     "opencode",

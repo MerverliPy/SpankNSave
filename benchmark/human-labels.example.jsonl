@@ -1,0 +1,2 @@
+{"id":"session-001","reportPath":"benchmark/private/reports/spanknsave-session-001.json","expectedCodes":["OVERSIZED_TOOL_OUTPUT"],"reviewerCount":2,"adjudicated":true}
+{"id":"session-002","reportPath":"benchmark/private/reports/spanknsave-session-002.json","expectedCodes":[],"reviewerCount":2,"adjudicated":true}

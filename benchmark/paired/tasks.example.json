@@ -1,0 +1,62 @@
+[
+  {
+    "id": "estimation-rounding-regression",
+    "baseRef": "HEAD",
+    "setupCommand": "node benchmark/paired/seeds/estimation-floor.mjs",
+    "prepareCommand": "if [ -d \"$TARGET_REPO/node_modules\" ]; then ln -s \"$TARGET_REPO/node_modules\" node_modules; else npm ci; fi",
+    "prompt": "A seeded regression was introduced into this repository. Run the relevant tests, identify the production-code defect, and fix it. Do not weaken, delete, skip, or rewrite tests. Keep the patch minimal.",
+    "verifyCommand": "npm run check",
+    "timeoutSeconds": 1200,
+    "treatmentMode": "enforce",
+    "treatmentConfig": {
+      "maxToolOutputTokens": 2000,
+      "maxOutputTokens": 5000,
+      "maxAssistantOutputTokens": 5000
+    },
+    "expectedFindingCodes": [],
+    "savingsFindingCodes": [
+      "OVERSIZED_TOOL_OUTPUT",
+      "EXCESSIVE_ASSISTANT_OUTPUT"
+    ]
+  },
+  {
+    "id": "context-threshold-regression",
+    "baseRef": "HEAD",
+    "setupCommand": "node benchmark/paired/seeds/context-boundary.mjs",
+    "prepareCommand": "if [ -d \"$TARGET_REPO/node_modules\" ]; then ln -s \"$TARGET_REPO/node_modules\" node_modules; else npm ci; fi",
+    "prompt": "A seeded regression was introduced into this repository. Run the relevant tests, identify the production-code defect, and fix it. Do not weaken, delete, skip, or rewrite tests. Keep the patch minimal.",
+    "verifyCommand": "npm run check",
+    "timeoutSeconds": 1200,
+    "treatmentMode": "enforce",
+    "treatmentConfig": {
+      "maxToolOutputTokens": 2000,
+      "maxOutputTokens": 5000,
+      "maxAssistantOutputTokens": 5000
+    },
+    "expectedFindingCodes": [],
+    "savingsFindingCodes": [
+      "OVERSIZED_TOOL_OUTPUT",
+      "EXCESSIVE_ASSISTANT_OUTPUT"
+    ]
+  },
+  {
+    "id": "duplicate-threshold-regression",
+    "baseRef": "HEAD",
+    "setupCommand": "node benchmark/paired/seeds/duplicate-threshold.mjs",
+    "prepareCommand": "if [ -d \"$TARGET_REPO/node_modules\" ]; then ln -s \"$TARGET_REPO/node_modules\" node_modules; else npm ci; fi",
+    "prompt": "A seeded regression was introduced into this repository. Run the relevant tests, identify the production-code defect, and fix it. Do not weaken, delete, skip, or rewrite tests. Keep the patch minimal.",
+    "verifyCommand": "npm run check",
+    "timeoutSeconds": 1200,
+    "treatmentMode": "enforce",
+    "treatmentConfig": {
+      "maxToolOutputTokens": 2000,
+      "maxOutputTokens": 5000,
+      "maxAssistantOutputTokens": 5000
+    },
+    "expectedFindingCodes": [],
+    "savingsFindingCodes": [
+      "OVERSIZED_TOOL_OUTPUT",
+      "EXCESSIVE_ASSISTANT_OUTPUT"
+    ]
+  }
+]
