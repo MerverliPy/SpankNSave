@@ -8,3 +8,5 @@ coverage/
 benchmark/results/*
 !benchmark/results/.gitkeep
 benchmark/private/
+
+/benchmark/fixtures/detectors/synthetic-conformance.jsonl
