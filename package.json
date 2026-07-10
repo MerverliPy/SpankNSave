@@ -67,7 +67,7 @@
     "@opencode-ai/plugin": "^1.17.4",
     "@types/node": "^25.9.3",
     "tsup": "^8.5.0",
-    "typescript": "^6.0.3"
+    "typescript": "^7.0.2"
   },
   "overrides": {
     "esbuild": "0.28.1"
